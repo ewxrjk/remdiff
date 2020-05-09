@@ -18,6 +18,7 @@
 #include "remdiff.h"
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/wait.h>
@@ -111,7 +112,7 @@ void Comparison::add_file(const std::string &f,
   int status;
   if(waitpid(pid, &status, WNOHANG) >= 0) {
     if(WIFSIGNALED(status)) {
-       fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
+      fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
       exit(2);
     }
     if(WEXITSTATUS(status) != 0) {
