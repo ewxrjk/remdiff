@@ -32,15 +32,20 @@ const struct option longopts[] = {
 
 static void help() {
   printf(
+    "remdiff -- remote diff over SSH\n"
+    "\n"
     "Usage:\n"
-    "  remdiff [OPTIONS] [--] [HOST:]FILES\n"
+    "  remdiff [OPTIONS] [--] [HOST:]PATH [HOST:]PATH\n"
     "Options:\n"
     "  --normal                   Traditional diff\n"
     "  -q, --brief                Report only when files differ\n"
     "  -u, -U NUM, --unified NUM  Unified diff (with NUM lines of context)\n"
     "  -y, --side-by-side         Side-by-side diff\n"
     "  --help                     Display usage message\n"
-    "  --version                  Display version string\n");
+    "  --version                  Display version string\n"
+    "\n"
+    "HOST should be something acceptable to your SSH client.\n"
+    "Exit status is as for diff: 0 no difference, 1 difference, 2 error.\n");
 }
 
 static void version() {
