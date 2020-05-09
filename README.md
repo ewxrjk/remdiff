@@ -44,7 +44,7 @@ Either file can be local or remote
 
 ## Future
 
-* Only a few `diff` options are implemented; add more.
+* A few `diff` options are still missing.
 * Recursive diff!
 * Remote error behavior isn't great.
 * Put filenames back into `diff...` lines in output.

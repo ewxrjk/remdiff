@@ -8,6 +8,7 @@ remdiff \- remote diff
 .PP
 To specify a remote filename, use the syntax \fIHOSTNAME\fB:\fIPATH\fR.
 .SH OPTIONS
+.SS "Mode Options"
 .TP
 .B --normal
 Display a traditional diff.
@@ -21,12 +22,22 @@ This is the default.
 .TP
 .B -U \fICONTEXT\fR, \fB--unified\fI CONTEXT
 Display a unified diff with \fICONTEXT\fR lines of context.
+.SS "Other Options"
 .TP
 .B --help
 Display a usage message.
 .TP
 .B --version
-Display a versions tring.
+Display a versions string.
+.SS "Diff Options"
+Many options from \fBdiff\fR(1) are supported.
+For a complete list, use:
+.PP
+.RS
+.nf
+remdiff --help
+.fi
+.RE
 .SH "EXIT STATUS"
 Possible exit status values are:
 .TP

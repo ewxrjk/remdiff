@@ -42,11 +42,10 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
     break;
   case 'q': args.push_back("-q"); break;
   case 'y': args.push_back("-y"); break;
-  default:
-    fprintf(stderr, "ERROR: unsupported mode %d\n", mode);
-    return 2;
-    break;
+  default: fprintf(stderr, "ERROR: unsupported mode %d\n", mode); return 2;
   }
+  // Add the extra arguments (bizarrely there is no std::vector::append)
+  args.insert(args.end(), extra_args.begin(), extra_args.end());
 
   // Add the filenames
   add_file(f1, args);

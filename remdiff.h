@@ -17,6 +17,7 @@ class Comparison {
 public:
   int mode = 'u';
   const char *context = nullptr;
+  std::vector<std::string> extra_args;
 
   int compare_files(const std::string &f1, const std::string &f2);
   void add_file(const std::string &f, std::vector<std::string> &args);
