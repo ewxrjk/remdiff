@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "remdiff.h"
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
@@ -110,7 +111,9 @@ void Comparison::add_file(const std::string &f,
   // Ignore select error, just do a nonblocking probe of the file.
   // This can fail; SSH can be slow to exit after closing its stdout.
   int status;
-  if(waitpid(pid, &status, WNOHANG) >= 0) {
+  pid_t rc;
+  if((rc = waitpid(pid, &status, WNOHANG)) > 0) {
+    assert(rc == pid);
     if(WIFSIGNALED(status)) {
       fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
       exit(2);
@@ -131,9 +134,11 @@ void Comparison::add_file(const std::string &f,
 
 void Comparison::wait_children() {
   for(size_t n = 0; n < processes.size(); n++) {
-    int rc, status;
+    int status;
+    pid_t rc;
     while((rc = waitpid(processes[n], &status, 0)) < 0 && errno == EINTR)
       /*repeat*/;
+    assert(rc == processes[n]);
     if(WIFSIGNALED(status)) {
       fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
       exit(2);
@@ -194,10 +199,12 @@ int Comparison::run_diff(std::vector<std::string> &args) {
     exit(2);
   }
   fclose(fp);
-  int rc, status;
+  int status;
+  pid_t rc;
   // Handle diff status
   while((rc = waitpid(pid, &status, 0)) < 0 && errno == EINTR)
     /*repeat*/;
+  assert(rc == pid);
   if(WIFSIGNALED(status)) {
     fprintf(stderr, "ERROR: diff: %s\n", strsignal(WTERMSIG(status)));
     exit(2);
