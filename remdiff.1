@@ -1,0 +1,40 @@
+.TH remdiff 1
+.SH NAME
+remdiff \- remote diff
+.SH SYNOPSIS
+\fBremdiff\fR [\fIOPTIONS\fR] \fIFILENAME FILENAME
+.SH DESCRIPTION
+\fBremdiff\fR is a wrapper for \fBdiff\fR(1) that access remote files via \fBssh(1)\fR.
+.PP
+To specify a remote filename, use the syntax \fIHOSTNAME\fB:\fIPATH\fR.
+.SH OPTIONS
+.TP
+.B --normal
+Display a traditional diff.
+.TP
+.B -q\fR, \fB--brief
+Report only when files differ.
+.TP
+.B -u
+Display a unified diff.
+This is the default.
+.TP
+.B -U \fICONTEXT\fR, \fB--unified\fI CONTEXT
+Display a unified diff with \fICONTEXT\fR lines of context.
+.TP
+.B --help
+Display a usage message.
+.TP
+.B --version
+Display a versions tring.
+.SH "EXIT STATUS"
+Possible exit status values are:
+.TP
+.B 0
+Files are the same.
+.TP
+.B 1
+Files differ.
+.TP
+.B 2
+An error occurred.

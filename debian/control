@@ -1,0 +1,13 @@
+Source: remdiff
+Section: utils
+Priority: optional
+Maintainer: Richard Kettlewell <rjk@greenend.org.uk>
+Standards-Version: 3.9.2
+Homepage: https://github.com/ewxrjk/remdiff
+
+Package: remdiff
+Architecture: any
+Depends: diffutils,${misc:Depends},${shlibs:Depends}
+Recommends: openssh-client
+Description: Remote diff
+ A wrapper around diff which automatically retrieves files via SSH.
