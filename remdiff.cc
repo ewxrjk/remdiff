@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "remdiff.h"
+#include "compare.h"
+#include "misc.h"
 #include <cstdio>
+#include <csignal>
 #include <getopt.h>
-#include <map>
 
 static int passthru_option_val = 2 * (UCHAR_MAX) + 1;
 static std::map<int, std::string> passthru_option_map;
@@ -92,6 +94,10 @@ static void help() {
     "Exit status is as for diff: 0 no difference, 1 difference, 2 error.\n");
 }
 
+#ifndef TAG
+#define TAG "unknown"
+#endif
+
 static void version() {
   printf("version %s tag %s\n", PACKAGE_VERSION, TAG);
 }
@@ -109,6 +115,7 @@ int main(int argc, char **argv) {
     { "_unified", no_argument, nullptr, 'u' },
     { "unified", required_argument, nullptr, 'U' },
     { "version", no_argument, nullptr, OPT_VERSION },
+    { "debug", no_argument, nullptr, OPT_DEBUG },
   };
 
   // Fill in pass-through options
@@ -159,6 +166,7 @@ int main(int argc, char **argv) {
       break;
     case 'y': c.mode = 'y'; break;
     case OPT_VERSION: version(); return 0;
+    case OPT_DEBUG: debug = true; break;
     default: {
       auto it = passthru_option_map.find(n);
       if(it != passthru_option_map.end()) {
@@ -179,6 +187,9 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  // Suppress SIGPIPE
+  signal(SIGPIPE, SIG_IGN);
+
   std::string f1 = argv[optind], f2 = argv[optind + 1];
 
   // If one is a directory and the other a file, compare the file in the
@@ -188,5 +199,10 @@ int main(int argc, char **argv) {
   // If both are directories and --recursive, recursively compare files.
   // TODO
 
-  return c.compare_files(f1, f2);
+  try {
+    return c.compare_files(f1, f2);
+  } catch(std::runtime_error &e) {
+    fprintf(stderr, "ERROR: %s\n", e.what());
+    return 2;
+  }
 }

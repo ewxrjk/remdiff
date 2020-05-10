@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "remdiff.h"
+#include "compare.h"
+#include "misc.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -23,8 +25,24 @@
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <deque>
+#include "sftp.h"
+
+Comparison::~Comparison() {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s\n", __func__);
+  // Join any surviving threads
+  drain_fds();
+  join_threads();
+  // Close SFTP connections
+  for(auto &it : conns)
+    delete it.second;
+  conns.clear();
+}
 
 int Comparison::compare_files(const std::string &f1, const std::string &f2) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s %s\n", __func__, f1.c_str(), f2.c_str());
   std::vector<std::string> args;
 
   args.push_back("diff");
@@ -54,12 +72,15 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
   // Do the diff
   int rc = run_diff(args);
 
-  wait_children();
+  drain_fds();
+  join_threads();
   return rc;
 }
 
 void Comparison::add_file(const std::string &f,
                           std::vector<std::string> &args) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s\n", __func__, f.c_str());
   size_t colon;
   if((colon = f.find(':')) == std::string::npos) {
     // Local file
@@ -70,86 +91,117 @@ void Comparison::add_file(const std::string &f,
   std::string host = f.substr(0, colon);
   std::string path = f.substr(colon + 1);
 
-  // Run SSH to get the file contents
+  // Make sure we have an SFTP connection
+  SFTP::Connection *conn;
+  auto it = conns.find(host);
+  if(it == conns.end()) {
+    conn = new SFTP::Connection(host);
+    conns[host] = conn;
+  } else
+    conn = it->second;
+
+  // Ensure it is connected
+  conn->connect();
+
+  // Open the file
+  std::string handle = conn->open(path, SSH_FXF_READ);
+
+  // TODO server can open a directory, but then fail in first read,
+  // leading to poor diagnostics. In protocol v4 we can fstat the file
+  // to find out its type, but the most popular server is v3 only...
+
+  // Create a pipe to feed it to the child
   int p[2];
   if(pipe(p) < 0) {
     fprintf(stderr, "ERROR: pipe: %s\n", strerror(errno));
     exit(2);
   }
-  pid_t pid;
-  if((pid = fork()) < 0) {
-    fprintf(stderr, "ERROR: fork: %s\n", strerror(errno));
-    exit(2);
-  }
-  if(pid == 0) {
-    std::string cmd = "cat ";
-    // Quote the filename conservatively
-    for(size_t n = 0; n < path.size(); n++) {
-      char ch = path[n];
-      if(ch > 0 && ch < 127 && !isalnum(ch) && ch != '/')
-        cmd += '\\';
-      cmd += ch;
-    }
-    if(dup2(p[1], 1) < 0) {
-      fprintf(stderr, "ERROR: dup2: %s\n", strerror(errno));
-      _Exit(2);
-    }
-    close(p[0]);
-    close(p[1]);
-    execlp("ssh", "ssh", "-T", "-x", host.c_str(), cmd.c_str(),
-           (char *)nullptr);
-    fprintf(stderr, "ERROR: execlp ssh: %s\n", strerror(errno));
-    _Exit(2);
-  }
-  close(p[1]);
-  // Wait for the child to produce some output or EOF
-  fd_set fds;
-  FD_ZERO(&fds);
-  FD_SET(p[0], &fds);
-  select(p[0] + 1, &fds, NULL, NULL, NULL);
-  // Ignore select error, just do a nonblocking probe of the file.
-  // This can fail; SSH can be slow to exit after closing its stdout.
-  int status;
-  pid_t rc;
-  if((rc = waitpid(pid, &status, WNOHANG)) > 0) {
-    assert(rc == pid);
-    if(WIFSIGNALED(status)) {
-      fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
-      exit(2);
-    }
-    if(WEXITSTATUS(status) != 0) {
-      // Assume SSH or cat produced a diagnostic
-      exit(2);
-    }
-    // SSH exited OK; the file was empty.
-  } else {
-    // SSH still running; clean it up when we're finished.
-    processes.push_back(pid);
-  }
+  // Don't leak the writer end of the pipe
+  close_on_exec(p[1]);
+
+  // Create a thread to do feeding
+  threads.push_back(std::thread(Comparison::feed_file, conn, f, handle, p[1]));
+  fds.push_back(p[0]);
+  // TODO push this into run_diff?
+
+  // Replace the filename with the reader end of the pipe
   char buffer[128];
   snprintf(buffer, sizeof buffer, "/dev/fd/%d", p[0]);
   args.push_back(buffer);
 }
 
-void Comparison::wait_children() {
-  for(size_t n = 0; n < processes.size(); n++) {
-    int status;
-    pid_t rc;
-    while((rc = waitpid(processes[n], &status, 0)) < 0 && errno == EINTR)
-      /*repeat*/;
-    assert(rc == processes[n]);
-    if(WIFSIGNALED(status)) {
-      fprintf(stderr, "ERROR: ssh: %s\n", strsignal(WTERMSIG(status)));
-      exit(2);
+void Comparison::feed_file(SFTP::Connection *conn, std::string context,
+                           std::string handle, int fd) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s\n", __func__);
+  uint32_t id;
+  uint64_t offset = 0;
+  size_t chunk = 4096;
+  std::string result;
+  size_t inflight_limit = 4;
+  std::deque<uint32_t> ids;
+
+  try {
+    for(;;) {
+      // Make sure there are plenty of reads in flight
+      while(ids.size() < inflight_limit) {
+        id = conn->begin_read(handle, offset, chunk);
+        offset += chunk;
+        ids.push_back(id);
+      }
+      // Wait for the next read to finish
+      id = ids.front();
+      ids.pop_front();
+      result = conn->finish_read(id);
+      if(result.size() == 0)
+        break;
+      if(writeall(fd, &result[0], result.size()) < 0) {
+        if(errno == EPIPE) {
+          // diff stopped before reading everything (possibly it never even ran)
+          break;
+        }
+        syserror(context + ": write");
+      }
+      offset += result.size();
     }
-    if(WEXITSTATUS(status) != 0) {
-      fprintf(stderr, "ERROR: ssh: exit status %d\n", WEXITSTATUS(status));
-      exit(2);
+    if(debug)
+      fprintf(stderr, "DEBUG: %s complete\n", __func__);
+  } catch(std::runtime_error &e) {
+    fprintf(stderr, "ERROR: %s\n", e.what());
+  }
+  // Reap any remaining reads
+  while(ids.size() > 0) {
+    try {
+      id = ids.front();
+      ids.pop_front();
+      conn->finish_read(id);
+    } catch(std::runtime_error &e) {
+      // Ignore any errors
     }
   }
+  close(fd);
+  conn->close(handle);
+}
+
+void Comparison::drain_fds() {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s\n", __func__);
+  for(auto fd : fds)
+    close(fd);
+  fds.clear();
+}
+
+void Comparison::join_threads() {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s\n", __func__);
+  for(auto &t : threads)
+    t.join();
+  threads.clear();
 }
 
 int Comparison::run_diff(std::vector<std::string> &args) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s\n", __func__);
   std::vector<const char *> cargs;
   for(auto &a : args) {
     cargs.push_back(a.c_str());
@@ -166,12 +218,16 @@ int Comparison::run_diff(std::vector<std::string> &args) {
     exit(2);
   }
   if(pid == 0) {
+    // Restore SIGPIPE for the child
+    signal(SIGPIPE, SIG_DFL);
+    // Plumb in the pipes
     if(dup2(p[1], 1) < 0) {
       fprintf(stderr, "ERROR: dup2: %s\n", strerror(errno));
       _Exit(2);
     }
     close(p[0]);
     close(p[1]);
+    // Execute diff
     execvp(cargs[0], (char **)&cargs[0]);
     fprintf(stderr, "ERROR: execvp %sh: %s\n", cargs[0], strerror(errno));
     _Exit(2);

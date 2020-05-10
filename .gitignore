@@ -11,9 +11,12 @@ debian/files
 debian/*.log
 debian/*.substvars
 .deps
+dox
+.gdb_history
 Makefile
 Makefile.in
 *.o
 remdiff
 stamp-h1
+*.tar.gz
 .vscode

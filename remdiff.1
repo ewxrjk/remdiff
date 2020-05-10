@@ -4,7 +4,7 @@ remdiff \- remote diff
 .SH SYNOPSIS
 \fBremdiff\fR [\fIOPTIONS\fR] \fIFILENAME FILENAME
 .SH DESCRIPTION
-\fBremdiff\fR is a wrapper for \fBdiff\fR(1) that access remote files via \fBssh(1)\fR.
+\fBremdiff\fR is a wrapper for \fBdiff\fR(1) that access remote files via SFTP.
 .PP
 To specify a remote filename, use the syntax \fIHOSTNAME\fB:\fIPATH\fR.
 .SH OPTIONS
@@ -29,6 +29,9 @@ Display a usage message.
 .TP
 .B --version
 Display a versions string.
+.TP
+.B --debug
+Dispay debug information.
 .SS "Diff Options"
 Many options from \fBdiff\fR(1) are supported.
 For a complete list, use:

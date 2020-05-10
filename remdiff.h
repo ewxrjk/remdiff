@@ -1,31 +1,38 @@
+/*
+ * This file is part of remdiff.
+ * Copyright © Richard Kettlewell
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef REMDIFF_H
 #define REMDIFF_H
+/** @file remdiff.h
+ * @brief Common definitions
+ */
 
 #include "config.h"
 #include <climits>
 #include <string>
 #include <vector>
+#include <map>
 #include <unistd.h>
 
 enum {
   OPT_NORMAL = (UCHAR_MAX + 1),
   OPT_HELP,
   OPT_VERSION,
-};
-
-class Comparison {
-public:
-  int mode = 'u';
-  const char *context = nullptr;
-  std::vector<std::string> extra_args;
-
-  int compare_files(const std::string &f1, const std::string &f2);
-  void add_file(const std::string &f, std::vector<std::string> &args);
-  void wait_children();
-  int run_diff(std::vector<std::string> &args);
-
-private:
-  std::vector<pid_t> processes;
+  OPT_DEBUG,
 };
 
 #endif

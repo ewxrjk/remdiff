@@ -1,6 +1,6 @@
 # Remote Diff
 
-`remdiff` is a wrapper for `diff` that access remote files via SSH.
+`remdiff` is a wrapper for `diff` that access remote files via SFTP.
 
 ## Example
 
@@ -46,5 +46,5 @@ Either file can be local or remote
 
 * A few `diff` options are still missing.
 * Recursive diff!
-* Remote error behavior isn't great.
+* Some remote error cases are still poor.
 * Put filenames back into `diff...` lines in output.

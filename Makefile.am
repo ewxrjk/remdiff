@@ -17,9 +17,18 @@
 #
 tag:=$(shell git describe --tags --dirty --always)
 bin_PROGRAMS=remdiff
-remdiff_SOURCES=remdiff.cc compare.cc
+remdiff_SOURCES=\
+    compare.cc \
+    compare.h \
+    misc.cc \
+    misc.h \
+    remdiff.cc \
+    remdiff.h \
+    sftp.cc \
+    sftp.h \
+    sftp-internal.h
 AM_CXXFLAGS=-DTAG=\"${tag}\"
 man_MANS=remdiff.1
-EXTRA_DIST=${man_MANS} README.md .clang-format .gitignore \
+EXTRA_DIST=${man_MANS} README.md .clang-format .gitignore Doxyfile \
     debian/changelog debian/compat debian/control debian/copyright debian/rules
 ACLOCAL_AMFLAGS=-I m4

@@ -25,6 +25,8 @@ AC_CONFIG_SRCDIR([remdiff.cc])
 AM_CONFIG_HEADER([config.h])
 AC_LANG([C++])
 AC_PROG_CXX
+AC_C_BIGENDIAN
+AC_CHECK_LIB([pthread],[pthread_create])
 CXXFLAGS="-std=c++11 ${CXXFLAGS}"
 AC_SET_MAKE
 AC_DEFINE([_GNU_SOURCE], [1], [use GNU extensions])
