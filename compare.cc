@@ -43,6 +43,8 @@ Comparison::~Comparison() {
 int Comparison::compare_files(const std::string &f1, const std::string &f2) {
   if(debug)
     fprintf(stderr, "DEBUG: %s %s %s\n", __func__, f1.c_str(), f2.c_str());
+
+  // We will build up the full diff comamnd line here.
   std::vector<std::string> args;
 
   args.push_back("diff");
@@ -65,15 +67,19 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
   // Add the extra arguments (bizarrely there is no std::vector::append)
   args.insert(args.end(), extra_args.begin(), extra_args.end());
 
-  // Add the filenames
+  // Add the filenames, possibly replacing them with pipe endpoints,
+  // if they are remote files.
   add_file(f1, args);
   add_file(f2, args);
 
   // Do the diff
   int rc = run_diff(args);
 
+  // Clean up the infrastructure we created.
   drain_fds();
   join_threads();
+
+  // Done.
   return rc;
 }
 
@@ -91,7 +97,8 @@ void Comparison::add_file(const std::string &f,
   std::string host = f.substr(0, colon);
   std::string path = f.substr(colon + 1);
 
-  // Make sure we have an SFTP connection
+  // Make sure we have an SFTP connection. If both files are on the same
+  // host we can share the connection.
   SFTP::Connection *conn;
   auto it = conns.find(host);
   if(it == conns.end()) {
@@ -116,7 +123,7 @@ void Comparison::add_file(const std::string &f,
     fprintf(stderr, "ERROR: pipe: %s\n", strerror(errno));
     exit(2);
   }
-  // Don't leak the writer end of the pipe
+  // Don't leak the writer end of the pipe.
   close_on_exec(p[1]);
 
   // Create a thread to do feeding
@@ -143,7 +150,7 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
 
   try {
     for(;;) {
-      // Make sure there are plenty of reads in flight
+      // Make sure there are plenty of reads in flight.
       while(ids.size() < inflight_limit) {
         id = conn->begin_read(handle, offset, chunk);
         offset += chunk;
@@ -179,6 +186,7 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
       // Ignore any errors
     }
   }
+  // We own the local and remote file descriptors.
   close(fd);
   conn->close(handle);
 }
@@ -186,6 +194,8 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
 void Comparison::drain_fds() {
   if(debug)
     fprintf(stderr, "DEBUG: %s\n", __func__);
+  // We close the read endpoints. If all went well they are idle
+  // by now. Otherwise feed_file is still going and it will get EPIPE.
   for(auto fd : fds)
     close(fd);
   fds.clear();
@@ -202,16 +212,19 @@ void Comparison::join_threads() {
 int Comparison::run_diff(std::vector<std::string> &args) {
   if(debug)
     fprintf(stderr, "DEBUG: %s\n", __func__);
+  // Convert arguments to C format, as expected by execvp.
   std::vector<const char *> cargs;
   for(auto &a : args) {
     cargs.push_back(a.c_str());
   }
   cargs.push_back(nullptr);
+  // Create the pipe for the output.
   int p[2];
   if(pipe(p) < 0) {
     fprintf(stderr, "ERROR: pipe: %s\n", strerror(errno));
     exit(2);
   }
+  // Create the child process.
   pid_t pid;
   if((pid = fork()) < 0) {
     fprintf(stderr, "ERROR: fork: %s\n", strerror(errno));

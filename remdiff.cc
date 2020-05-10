@@ -22,29 +22,47 @@
 #include <csignal>
 #include <getopt.h>
 
+/** @brief Counter for allocated option IDs */
 static int passthru_option_val = 2 * (UCHAR_MAX) + 1;
+
+/** @brief Option IDs to full option names */
 static std::map<int, std::string> passthru_option_map;
+
+/** @brief Help for passed-through options */
 static std::vector<std::string> passthru_help;
 
+/** @brief Register a pass-through option
+ * @param longopts Option table
+ * @param name Option name (no initial "--")
+ * @param val Short option name or -1 to allocate one
+ * @param value If the option takes a value, the name of the value; otherwise @c
+ * nullptr.
+ */
 static void passthru_option(std::vector<struct option> &longopts,
                             const char *name, int val,
                             const char *value = nullptr) {
   std::string help_string;
+  // The full option name
   std::string opt = "--" + std::string(name);
   int has_arg;
   if(val < 0) {
+    // No short option name; allocate an ID.
     val = passthru_option_val++;
     help_string = "    " + opt;
   } else
     help_string = "-" + std::string(1, val) + ", " + opt;
   if(value) {
+    // Quote the value name in the help string
     help_string += " ";
     help_string += value;
     has_arg = required_argument;
   } else
     has_arg = no_argument;
+  // Update the list for --help output
   passthru_help.push_back(help_string);
+  // Update the option table for getopt_long
   longopts.push_back(option{ name, has_arg, nullptr, val });
+  // Map the ID to the full option name
   passthru_option_map[val] = opt;
 }
 
@@ -150,6 +168,8 @@ int main(int argc, char **argv) {
     if(longopts[n].has_arg == required_argument)
       shortopts.push_back(':');
   }
+
+  // Parse the command line
   while((n = getopt_long(argc, argv, shortopts.c_str(), &longopts[0], nullptr))
         >= 0) {
     switch(n) {
