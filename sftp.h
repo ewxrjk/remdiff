@@ -118,6 +118,12 @@ public:
    */
   std::string open(const std::string &path, uint32_t mode);
 
+  /** @brief Open a remote directory
+   * @param path Remote filename
+   * @return Handle for later access
+   */
+  std::string opendir(const std::string &path);
+
   /** @brief Close a remote file
    * @param handle Handle as returned by @ref open
    */
@@ -150,6 +156,20 @@ public:
    * On EOF, returns an empty string.
    */
   std::string finish_read(uint32_t id);
+
+  /** @brief Initiate a directory read
+   * @param handle Handle as returned by @ref open
+   * @return ID for @ref finish_read
+   */
+  uint32_t begin_readdir(const std::string &handle);
+
+  /** @brief Complete a read
+   * @param id ID from begin_read
+   * @param names Names read
+   *
+   * On EOF, returns an empty string.
+   */
+  void finish_readdir(uint32_t id, std::vector<SFTP::Attributes> &names);
 
 private:
   /** @brief Hostname */
@@ -267,6 +287,14 @@ private:
    */
   void error(const std::string &body, const std::string &context = "");
 
+  /** @brief Parse the body (after @c id) of a @ref SSH_FXP_NAME packet
+   * @param s Packet being parsed
+   * @param pos Position in packet
+   * @param names Names and attributes
+   */
+  void unpacknames(const std::string &s, size_t &pos,
+                   std::vector<Attributes> names);
+
   /** @brief Lock guarding all later fields */
   std::mutex lock;
 
@@ -351,13 +379,19 @@ public:
   /** @brief Extended attributes */
   std::vector<std::pair<std::string, std::string>> extended;
 
+  /** @brief Filename, if unpacked from @ref SSH_FXP_NAME */
+  std::string filename;
+
+  /** @brief Expanded filename if unpacked from @ref SSH_FXP_NAME */
+  std::string longname;
+
 private:
   /** @brief Unpack a serialized attributes object
    * @param c Connection from which serialized attributes came
    * @param reply Serialized attributes
    * @param pos Unpack position
    */
-  void unpack(const SFTP::Connection &c, std::string &reply, size_t &pos);
+  void unpack(const SFTP::Connection &c, const std::string &reply, size_t &pos);
   friend class Connection;
 };
 

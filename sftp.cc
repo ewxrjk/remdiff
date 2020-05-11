@@ -346,6 +346,20 @@ void SFTP::Connection::error(const std::string &reply,
   }
 }
 
+void SFTP::Connection::unpacknames(const std::string &s, size_t &pos,
+                                   std::vector<Attributes> names) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s\n", __func__, name.c_str());
+  uint32_t count = unpack32(s, pos);
+  while(count-- > 0) {
+    Attributes a;
+    a.filename = unpackstr(s, pos);
+    a.longname = unpackstr(s, pos);
+    a.unpack(*this, s, pos);
+    names.push_back(a);
+  }
+}
+
 static std::string format_handle(const std::string &handle) {
   std::string r;
   char buffer[16];
@@ -398,6 +412,34 @@ void SFTP::Connection::close(const std::string &handle) {
   int type = await_reply(id, reply);
   switch(type) {
   case SSH_FXP_STATUS: error(reply); break;
+  default: syserror(name + ": unexpected SFTP response");
+  }
+}
+
+std::string SFTP::Connection::opendir(const std::string &path) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s %s\n", __func__, name.c_str(), path.c_str());
+  const std::string fullpath =
+    path.size() > 0 && path.at(0) == '/' ? path : home + "/" + path;
+  std::string cmd, reply, handle;
+  uint32_t id = newid();
+  newpacket(cmd, SSH_FXP_OPEN);
+  pack32(cmd, id);        // uint32 id
+  packstr(cmd, fullpath); // string filename
+  pack32(cmd, 0);         // uint32 flags
+  send(cmd);
+  int type = await_reply(id, reply);
+  size_t pos = 4;
+  switch(type) {
+  case SSH_FXP_HANDLE:
+    handle = unpackstr(reply, pos);
+    if(debug)
+      fprintf(stderr, "DEBUG: %s %s %s -> [%s]\n", __func__, name.c_str(),
+              fullpath.c_str(), format_handle(handle).c_str());
+    return handle;
+  case SSH_FXP_STATUS:
+    error(reply, path);
+    syserror(name + ": unexpected SFTP status");
   default: syserror(name + ": unexpected SFTP response");
   }
 }
@@ -483,8 +525,37 @@ std::string SFTP::Connection::finish_read(uint32_t id) {
   }
 }
 
-void SFTP::Attributes::unpack(const SFTP::Connection &c, std::string &reply,
-                              size_t &pos) {
+uint32_t SFTP::Connection::begin_readdir(const std::string &handle) {
+  std::string cmd;
+  uint32_t id = newid();
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s [%s] %#" PRIx32 "\n", __func__, name.c_str(),
+            format_handle(handle).c_str(), id);
+  newpacket(cmd, SSH_FXP_READDIR);
+  pack32(cmd, id);      // uint32 id
+  packstr(cmd, handle); // string handle
+  send(cmd);
+  return id;
+}
+
+void SFTP::Connection::finish_readdir(uint32_t id,
+                                      std::vector<SFTP::Attributes> &names) {
+  if(debug)
+    fprintf(stderr, "DEBUG: %s %s %#" PRIx32 "\n", __func__, name.c_str(), id);
+  std::string reply;
+  int type = await_reply(id, reply);
+  size_t pos = 4;
+  switch(type) {
+  case SSH_FXP_NAME: unpacknames(reply, pos, names); break;
+  case SSH_FXP_STATUS:
+    error(reply);
+    syserror(name + ": unexpected SFTP status");
+  default: syserror(name + ": unexpected SFTP response");
+  }
+}
+
+void SFTP::Attributes::unpack(const SFTP::Connection &c,
+                              const std::string &reply, size_t &pos) {
   flags = c.unpack32(reply, pos);
   size = (flags & SSH_FILEXFER_ATTR_SIZE) ? c.unpack64(reply, pos) : 0;
   uid = (flags & SSH_FILEXFER_ATTR_UIDGID) ? c.unpack32(reply, pos) : 0;
