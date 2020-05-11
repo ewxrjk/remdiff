@@ -105,7 +105,7 @@ void SFTP::Connection::connect() {
     if(wpipe[1] >= 0)
       ::close(wpipe[1]);
     disconnect();
-    throw e;
+    throw;
   }
 }
 

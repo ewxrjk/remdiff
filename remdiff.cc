@@ -128,7 +128,10 @@ int main(int argc, char **argv) {
   std::vector<struct option> longopts{
     { "brief", no_argument, nullptr, 'q' },
     { "help", no_argument, nullptr, OPT_HELP },
+    { "new-file", no_argument, nullptr, 'N' },
+    { "unidirectional-new-file", no_argument, nullptr, OPT_UNI_NEW_FILE },
     { "normal", no_argument, nullptr, OPT_NORMAL },
+    { "report-identical-files", no_argument, nullptr, 's' },
     { "side-by-side", no_argument, nullptr, 'y' },
     { "_unified", no_argument, nullptr, 'u' },
     { "unified", required_argument, nullptr, 'U' },
@@ -136,27 +139,32 @@ int main(int argc, char **argv) {
     { "debug", no_argument, nullptr, OPT_DEBUG },
   };
 
-  // Fill in pass-through options
-  passthru_option(longopts, "suppress-common-lines", -1);
-  passthru_option(longopts, "show-c-function", 'p');
+  // Fill in diff options that we don't document explicitly.
+  // Many are passed through automatically, a few need special handling.
+  passthru_option(longopts, "color", -1, "WHEN");
   passthru_option(longopts, "expand-tabs", 't');
-  passthru_option(longopts, "initial-tab", 'T');
-  passthru_option(longopts, "suppress-blank-empty", -1);
+  passthru_option(longopts, "horizon-lines", -1, "LINES");
+  passthru_option(longopts, "ifdef", 'D', "NAME");
+  passthru_option(longopts, "ignore-all-space", 'w');
+  passthru_option(longopts, "ignore-blank-lines", 'B');
   passthru_option(longopts, "ignore-case", 'i');
   passthru_option(longopts, "ignore-tab-expansion", 'E');
   passthru_option(longopts, "ignore-trailing-space", 'Z');
   passthru_option(longopts, "ignore-space-change", 'b');
-  passthru_option(longopts, "ignore-all-space", 'w');
-  passthru_option(longopts, "ignore-blank-lines", 'B');
-  passthru_option(longopts, "strip-trailing-cr", -1);
+  passthru_option(longopts, "initial-tab", 'T');
+  passthru_option(longopts, "left-column", -1);
   passthru_option(longopts, "minimal", 'd');
-  passthru_option(longopts, "speed-large-files", -1);
-  passthru_option(longopts, "width", 'w', "WIDTH");
-  passthru_option(longopts, "tabsize", -1, "SIZE");
-  passthru_option(longopts, "ifdef", 'D', "NAME");
-  passthru_option(longopts, "horizon-lines", -1, "LINES");
-  passthru_option(longopts, "color", -1, "WHEN");
+  passthru_help.push_back("-N, --new-file");
   passthru_option(longopts, "palette", -1, "PALETTE");
+  passthru_help.push_back("-s, --report-identical-files");
+  passthru_option(longopts, "show-c-function", 'p');
+  passthru_option(longopts, "speed-large-files", -1);
+  passthru_option(longopts, "strip-trailing-cr", -1);
+  passthru_option(longopts, "suppress-common-lines", -1);
+  passthru_option(longopts, "suppress-blank-empty", -1);
+  passthru_option(longopts, "tabsize", -1, "SIZE");
+  passthru_help.push_back("    --unidirectional-new-file");
+  passthru_option(longopts, "width", 'w', "WIDTH");
 
   // Terminate the long options list
   longopts.push_back(option{ nullptr, 0, nullptr, 0 });
@@ -175,7 +183,19 @@ int main(int argc, char **argv) {
     switch(n) {
     case OPT_HELP: help(); return 0;
     case OPT_NORMAL: c.mode = OPT_NORMAL; break;
+    case OPT_UNI_NEW_FILE:
+      c.flags &= ~(NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2);
+      c.flags |= NEW_AS_EMPTY_1;
+      break;
+    case 'N':
+      c.flags &= ~(NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2);
+      c.flags |= NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2;
+      break;
     case 'q': c.mode = 'q'; break;
+    case 's':
+      c.flags |= REPORT_IDENTICAL;
+      c.extra_args.push_back("-s");
+      break;
     case 'u':
       c.mode = 'u';
       c.context = nullptr;

@@ -26,6 +26,7 @@
 #include <vector>
 #include <map>
 #include <thread>
+#include <regex>
 
 namespace SFTP {
 class Connection;
@@ -53,7 +54,30 @@ public:
    */
   int compare_files(const std::string &f1, const std::string &f2);
 
+  /** @brief Comparison flags
+   *
+   * Possible bits are:
+   * - @ref NEW_AS_EMPTY_1: if the first file is missing, treat as empty
+   * - @ref NEW_AS_EMPTY_2: if the second file is missing, treat as empty
+   * - @ref REPORT_IDENTICAL: report identical files
+   */
+  unsigned flags;
+
 private:
+  /** @brief Substitution rule for replacing filenames in output */
+  struct Replacement {
+    /** @brief Pattern to match lines needing replacement */
+    std::regex pattern;
+
+    /** @brief Format of substitution */
+    std::string to;
+
+    /** @brief Execute the substitution */
+    std::string replace(const std::string &s) {
+      return std::regex_replace(s, pattern, to);
+    };
+  };
+
   /** @brief Hostnames to SFTP connections */
   std::map<std::string, SFTP::Connection *> conns;
 
@@ -63,11 +87,16 @@ private:
   /** @brief File descriptors to drain */
   std::vector<int> fds;
 
+  /** @brief Sequence of replacements to execute on each line */
+  std::vector<Replacement> replacements;
+
   /** @brief Add a file, either directly or replacing it with a pipe
    * @brief f Filename
    * @brief args Argument list to update
+   * @brief fileno File number (1 for old, 2 for new)
    */
-  void add_file(const std::string &f, std::vector<std::string> &args);
+  void add_file(const std::string &f, std::vector<std::string> &args,
+                int fileno);
 
   /** @brief Run the diff command
    * @param args Argument list

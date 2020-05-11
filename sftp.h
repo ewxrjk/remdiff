@@ -38,6 +38,39 @@
 #define SSH_FXF_EXCL 0x00000020
 #define SSH_FXF_TEXT 0x00000040
 
+#define SSH_FX_OK 0
+#define SSH_FX_EOF 1
+#define SSH_FX_NO_SUCH_FILE 2
+#define SSH_FX_PERMISSION_DENIED 3
+#define SSH_FX_FAILURE 4
+#define SSH_FX_BAD_MESSAGE 5
+#define SSH_FX_NO_CONNECTION 6
+#define SSH_FX_CONNECTION_LOST 7
+#define SSH_FX_OP_UNSUPPORTED 8
+#define SSH_FX_INVALID_HANDLE 9
+#define SSH_FX_NO_SUCH_PATH 10
+#define SSH_FX_FILE_ALREADY_EXISTS 11
+#define SSH_FX_WRITE_PROTECT 12
+#define SSH_FX_NO_MEDIA 13
+#define SSH_FX_NO_SPACE_ON_FILESYSTEM 14
+#define SSH_FX_QUOTA_EXCEEDED 15
+#define SSH_FX_UNKNOWN_PRINCIPAL 16
+#define SSH_FX_LOCK_CONFLICT 17
+#define SSH_FX_DIR_NOT_EMPTY 18
+#define SSH_FX_NOT_A_DIRECTORY 19
+#define SSH_FX_INVALID_FILENAME 20
+#define SSH_FX_LINK_LOOP 21
+#define SSH_FX_CANNOT_DELETE 22
+#define SSH_FX_INVALID_PARAMETER 23
+#define SSH_FX_FILE_IS_A_DIRECTORY 24
+#define SSH_FX_BYTE_RANGE_LOCK_CONFLICT 25
+#define SSH_FX_BYTE_RANGE_LOCK_REFUSED 26
+#define SSH_FX_DELETE_PENDING 27
+#define SSH_FX_FILE_CORRUPT 28
+#define SSH_FX_OWNER_INVALID 29
+#define SSH_FX_GROUP_INVALID 30
+#define SSH_FX_NO_MATCHING_BYTE_RANGE_LOCK 31
+
 namespace SFTP {
 
 class Attributes;
@@ -92,6 +125,7 @@ public:
 
   /** @brief Get remote file information
    * @param handle Handle as returned by @ref open
+   * @param attrs Attributes of remote file
    */
   void fstat(const std::string &handle, Attributes &attrs);
 
@@ -227,6 +261,7 @@ private:
 
   /** @brief Parse a @ref SSH_FXP_STATUS packet
    * @param body Reply body (excluding type and length)
+   * @param context Context string for exceptions
    *
    * Raises an exception if the status is nonzero.
    */
@@ -284,16 +319,44 @@ private:
 /** @brief SFTP file attributes */
 class Attributes {
 public:
+  /** @brief Flags controlling the other fields */
   uint32_t flags = 0;
+
+  /** @brief File size (if @ref  SSH_FILEXFER_ATTR_SIZE is set in @c flags) */
   uint64_t size = 0;
+
+  /** @brief Owning UID (if @ref  SSH_FILEXFER_ATTR_UIDGID is set in @c flags)
+   */
   uint32_t uid = 0;
+
+  /** @brief Owning GID (if @ref  SSH_FILEXFER_ATTR_UIDGID is set in @c flags)
+   */
   uint32_t gid = 0;
+
+  /** @brief File permissions (if @ref  SSH_FILEXFER_ATTR_PERMISSIONS is set in
+   * @c flags)
+   */
   uint32_t permissions = 0;
+
+  /** @brief Access time (if @ref  SSH_FILEXFER_ACMODTIME is set in
+   * @c flags)
+   */
   uint32_t atime = 0;
+
+  /** @brief Modification time (if @ref  SSH_FILEXFER_ACMODTIME is set in
+   * @c flags)
+   */
   uint32_t mtime = 0;
+
+  /** @brief Extended attributes */
   std::vector<std::pair<std::string, std::string>> extended;
 
 private:
+  /** @brief Unpack a serialized attributes object
+   * @param c Connection from which serialized attributes came
+   * @param reply Serialized attributes
+   * @param pos Unpack position
+   */
   void unpack(const SFTP::Connection &c, std::string &reply, size_t &pos);
   friend class Connection;
 };
@@ -301,10 +364,14 @@ private:
 /** @brief Exception representing an SFTP error */
 class Error : public std::runtime_error {
 public:
+  /** @brief Construct an SFTP error
+   * @param status SFTP error code
+   * @param message Human-readable SFTP error string
+   */
   Error(uint32_t status, const std::string &message) :
     std::runtime_error(message), status(status) {}
 
-private:
+  /** @brief SFTP error code */
   uint32_t status;
 };
 

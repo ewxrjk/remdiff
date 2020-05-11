@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <deque>
 #include "sftp.h"
 
@@ -44,7 +45,7 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
   if(debug)
     fprintf(stderr, "DEBUG: %s %s %s\n", __func__, f1.c_str(), f2.c_str());
 
-  // We will build up the full diff comamnd line here.
+  // We will build up the full diff command line here.
   std::vector<std::string> args;
 
   args.push_back("diff");
@@ -69,8 +70,8 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
 
   // Add the filenames, possibly replacing them with pipe endpoints,
   // if they are remote files.
-  add_file(f1, args);
-  add_file(f2, args);
+  add_file(f1, args, NEW_AS_EMPTY_1);
+  add_file(f2, args, NEW_AS_EMPTY_2);
 
   // Do the diff
   int rc = run_diff(args);
@@ -83,58 +84,137 @@ int Comparison::compare_files(const std::string &f1, const std::string &f2) {
   return rc;
 }
 
-void Comparison::add_file(const std::string &f,
-                          std::vector<std::string> &args) {
+void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
+                          int fileno) {
   if(debug)
     fprintf(stderr, "DEBUG: %s %s\n", __func__, f.c_str());
+  std::string newname = f;
+
   size_t colon;
   if((colon = f.find(':')) == std::string::npos) {
-    // Local file
-    args.push_back(f);
-    return;
+    // Local file. See if it exists.
+    struct stat statbuf;
+    if(stat(f.c_str(), &statbuf) < 0) {
+      if(errno == ENOENT && (fileno & flags))
+        newname = "/dev/null";
+      else
+        syserror(f);
+    } else {
+      // Reject directories without even opening them
+      if(S_ISDIR(statbuf.st_mode))
+        syserror(f, EISDIR);
+      newname = f;
+    }
+  } else {
+    // Parse the filename
+    std::string host = f.substr(0, colon);
+    std::string path = f.substr(colon + 1);
+
+    // Make sure we have an SFTP connection. If both files are on the same
+    // host we can share the connection.
+    SFTP::Connection *conn;
+    auto it = conns.find(host);
+    if(it == conns.end()) {
+      conn = new SFTP::Connection(host);
+      conns[host] = conn;
+    } else
+      conn = it->second;
+
+    // Ensure it is connected
+    conn->connect();
+
+    // Attempt to open the file
+    std::string handle;
+    bool open_ok;
+    try {
+      handle = conn->open(path, SSH_FXF_READ);
+      open_ok = true;
+    } catch(SFTP::Error &e) {
+      if(e.status != SSH_FX_NO_SUCH_FILE || !(fileno & flags))
+        throw;
+      newname = "/dev/null";
+    }
+
+    if(open_ok) {
+      // Reject directories
+      SFTP::Attributes attrs;
+      conn->fstat(handle, attrs);
+      if(S_ISDIR(attrs.permissions))
+        syserror(f, EISDIR);
+
+      // Create a pipe to feed it to the child
+      int p[2];
+      if(pipe(p) < 0)
+        syserror("pipe");
+      // Don't leak the writer end of the pipe.
+      close_on_exec(p[1]);
+
+      // Create a thread to do feeding
+      threads.push_back(
+        std::thread(Comparison::feed_file, conn, f, handle, p[1]));
+      fds.push_back(p[0]);
+      // TODO push this into run_diff?
+
+      // Replace the filename with the reader end of the pipe
+      char buffer[128];
+      snprintf(buffer, sizeof buffer, "/dev/fd/%d", p[0]);
+      newname = buffer;
+    }
   }
-  // Parse the filename
-  std::string host = f.substr(0, colon);
-  std::string path = f.substr(colon + 1);
 
-  // Make sure we have an SFTP connection. If both files are on the same
-  // host we can share the connection.
-  SFTP::Connection *conn;
-  auto it = conns.find(host);
-  if(it == conns.end()) {
-    conn = new SFTP::Connection(host);
-    conns[host] = conn;
-  } else
-    conn = it->second;
+  // Use the new name
+  args.push_back(newname);
 
-  // Ensure it is connected
-  conn->connect();
-
-  // Open the file
-  std::string handle = conn->open(path, SSH_FXF_READ);
-
-  // TODO server can open a directory, but then fail in first read,
-  // leading to poor diagnostics. In protocol v4 we can fstat the file
-  // to find out its type, but the most popular server is v3 only...
-
-  // Create a pipe to feed it to the child
-  int p[2];
-  if(pipe(p) < 0) {
-    fprintf(stderr, "ERROR: pipe: %s\n", strerror(errno));
-    exit(2);
+  if(newname != f) {
+    // Put it back when we're finished
+    std::string prefix, pattern, replacement;
+    switch(mode) {
+    case OPT_NORMAL: break;
+    case 'u':
+      switch(fileno) {
+      case 1:
+        replacements.push_back(Replacement{
+          std::regex("^--- " + newname, std::regex::extended),
+          "--- " + f,
+        });
+        break;
+      case 2:
+        replacements.push_back(Replacement{
+          std::regex("^\\+\\+\\+ " + newname, std::regex::extended),
+          "+++ " + f,
+        });
+        break;
+      }
+      break;
+    case 'q':
+      // handled below
+      break;
+    case 'y':
+      // no filenames
+      break;
+    default: fprintf(stderr, "ERROR: unsupported mode %d\n", mode); exit(2);
+    }
+    // TODO the REPORT_IDENTICAL support is not great; files that differ
+    // but have, e.g. 'and /dev/fd/3' in the difference will produce mangled
+    // output. A fix might be to hash the files (easy for remote files, can hash
+    // in feed_file) and synthesize the REPORT_IDENTICAL message if they match.
+    if(mode == 'q' || (flags & REPORT_IDENTICAL)) {
+      switch(fileno) {
+      case 1:
+        replacements.push_back(Replacement{
+          std::regex("^Files " + newname, std::regex::extended),
+          "Files " + f,
+        });
+        break;
+      case 2:
+        replacements.push_back(Replacement{
+          std::regex(" and " + newname, std::regex::extended),
+          " and " + f,
+        });
+        break;
+      }
+    }
   }
-  // Don't leak the writer end of the pipe.
-  close_on_exec(p[1]);
-
-  // Create a thread to do feeding
-  threads.push_back(std::thread(Comparison::feed_file, conn, f, handle, p[1]));
-  fds.push_back(p[0]);
-  // TODO push this into run_diff?
-
-  // Replace the filename with the reader end of the pipe
-  char buffer[128];
-  snprintf(buffer, sizeof buffer, "/dev/fd/%d", p[0]);
-  args.push_back(buffer);
 }
 
 void Comparison::feed_file(SFTP::Connection *conn, std::string context,
@@ -164,7 +244,8 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
         break;
       if(writeall(fd, &result[0], result.size()) < 0) {
         if(errno == EPIPE) {
-          // diff stopped before reading everything (possibly it never even ran)
+          // diff stopped before reading everything (possibly it never even
+          // ran)
           break;
         }
         syserror(context + ": write");
@@ -252,14 +333,19 @@ int Comparison::run_diff(std::vector<std::string> &args) {
     fprintf(stderr, "ERROR: fdopen: %s\n", strerror(errno));
     exit(2);
   }
-  char *line = NULL;
-  size_t n = 0;
-  while(getline(&line, &n, fp) != -1) {
-    // TODO replace filenames
-    fputs(line, stdout);
-    if(ferror(stdout)) {
-      fprintf(stderr, "ERROR: writing to stdout: %s\n", strerror(errno));
-      exit(2);
+  std::string line;
+  int ch;
+  while((ch = getc(fp)) >= 0) {
+    line += ch;
+    if(ch == '\n') {
+      for(auto &r : replacements)
+        line = r.replace(line);
+      fwrite(&line[0], 1, line.size(), stdout);
+      if(ferror(stdout)) {
+        fprintf(stderr, "ERROR: writing to stdout: %s\n", strerror(errno));
+        exit(2);
+      }
+      line.clear();
     }
   }
   if(ferror(fp)) {

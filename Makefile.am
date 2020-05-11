@@ -24,6 +24,7 @@ remdiff_SOURCES=\
     misc.h \
     remdiff.cc \
     remdiff.h \
+    replace.h \
     sftp.cc \
     sftp.h \
     sftp-internal.h

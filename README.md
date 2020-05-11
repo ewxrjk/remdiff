@@ -46,5 +46,3 @@ Either file can be local or remote
 
 * A few `diff` options are still missing.
 * Recursive diff!
-* Some remote error cases are still poor.
-* Put filenames back into `diff...` lines in output.
