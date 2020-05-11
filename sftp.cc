@@ -445,18 +445,31 @@ std::string SFTP::Connection::opendir(const std::string &path) {
 }
 
 void SFTP::Connection::fstat(const std::string &handle, Attributes &attrs) {
+  return gstat(handle, attrs, SSH_FXP_FSTAT);
+}
+
+void SFTP::Connection::stat(const std::string &path, Attributes &attrs) {
+  return gstat(path, attrs, SSH_FXP_STAT);
+}
+
+void SFTP::Connection::lstat(const std::string &path, Attributes &attrs) {
+  return gstat(path, attrs, SSH_FXP_LSTAT);
+}
+
+void SFTP::Connection::gstat(const std::string &handle, Attributes &attrs,
+                             uint32_t type) {
   if(debug)
     fprintf(stderr, "DEBUG: %s %s [%s]\n", __func__, name.c_str(),
             format_handle(handle).c_str());
   std::string cmd, reply;
   uint32_t id = newid();
-  newpacket(cmd, SSH_FXP_FSTAT);
+  newpacket(cmd, type);
   pack32(cmd, id);      // uint32 id
   packstr(cmd, handle); // string handle
   send(cmd);
-  int type = await_reply(id, reply);
+  int rtype = await_reply(id, reply);
   size_t pos = 4;
-  switch(type) {
+  switch(rtype) {
   case SSH_FXP_ATTRS: attrs.unpack(*this, reply, pos); break;
   case SSH_FXP_STATUS:
     error(reply);

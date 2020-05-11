@@ -135,6 +135,18 @@ public:
    */
   void fstat(const std::string &handle, Attributes &attrs);
 
+  /** @brief Get remote file information
+   * @param path Filename
+   * @param attrs Attributes of remote file
+   */
+  void stat(const std::string &path, Attributes &attrs);
+
+  /** @brief Get remote file information
+   * @param path Filename
+   * @param attrs Attributes of remote file
+   */
+  void lstat(const std::string &path, Attributes &attrs);
+
   /** @brief Get full path
    * @param path Filename
    * @return Full filename
@@ -257,6 +269,13 @@ private:
    * to parse it.
    */
   int await_reply(uint32_t id, std::string &body);
+
+  /** @brief Get remote file information
+   * @param s Filename or handle
+   * @param attrs Attributes of remote file
+   * @param type Packet type
+   */
+  void gstat(const std::string &s, Attributes &attrs, uint32_t type);
 
   /** @brief Unpack a uint32
    * @param s Packet being parsed
