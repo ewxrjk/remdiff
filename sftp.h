@@ -171,15 +171,17 @@ public:
 
   /** @brief Initiate a directory read
    * @param handle Handle as returned by @ref open
-   * @return ID for @ref finish_read
+   * @return ID for @ref finish_readdir
+   *
    */
   uint32_t begin_readdir(const std::string &handle);
 
-  /** @brief Complete a read
+  /** @brief Complete a directory read
    * @param id ID from begin_read
-   * @param names Names read
+   * @param names Names read (append, not set)
    *
-   * On EOF, returns an empty string.
+   * The name/attribute data read is *appended* to @p names,
+   * i.e. extending it compared to its value on entry.
    */
   void finish_readdir(uint32_t id, std::vector<SFTP::Attributes> &names);
 

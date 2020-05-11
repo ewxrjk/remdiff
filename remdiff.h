@@ -36,13 +36,4 @@ enum {
   OPT_DEBUG,
 };
 
-/** @brief Treat first file as empty if missing */
-#define NEW_AS_EMPTY_1 1
-
-/** @brief Treat second file as empty if missing */
-#define NEW_AS_EMPTY_2 2
-
-/** @brief Report identical files */
-#define REPORT_IDENTICAL 4
-
 #endif

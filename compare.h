@@ -32,7 +32,24 @@ namespace SFTP {
 class Connection;
 }
 
-/** @brief Context for a comparison
+/** @defgroup ComparisonFlags Flags for Comparison
+ *
+ * Flag bits for the @ref Comparison::flags field.
+ * @{
+ */
+
+/** @brief Treat first file as empty if missing */
+const unsigned NEW_AS_EMPTY_1 = 1;
+
+/** @brief Treat second file as empty if missing */
+const unsigned NEW_AS_EMPTY_2 = 2;
+
+/** @brief Report identical files */
+const unsigned REPORT_IDENTICAL = 4;
+
+/** @} */
+
+/** @brief Context for one or more comparisons
  */
 class Comparison {
 public:
@@ -41,10 +58,10 @@ public:
   /** @brief Comparison mode (corresponding to an option character) */
   int mode = 'u';
 
-  /** @brief Context argument to -U and similar */
+  /** @brief Context argument to @c -U and similar options */
   const char *context = nullptr;
 
-  /** @brief Arguments passed through to a diff */
+  /** @brief Arguments passed through to @c diff */
   std::vector<std::string> extra_args;
 
   /** @brief Compare two files
@@ -56,10 +73,10 @@ public:
 
   /** @brief Comparison flags
    *
-   * Possible bits are:
-   * - @ref NEW_AS_EMPTY_1: if the first file is missing, treat as empty
-   * - @ref NEW_AS_EMPTY_2: if the second file is missing, treat as empty
-   * - @ref REPORT_IDENTICAL: report identical files
+   * Possible bits are found in @ref ComparisonFlags :
+   * - @ref NEW_AS_EMPTY_1 : if the first file is missing, treat as empty
+   * - @ref NEW_AS_EMPTY_2 : if the second file is missing, treat as empty
+   * - @ref REPORT_IDENTICAL : report identical files
    */
   unsigned flags;
 
