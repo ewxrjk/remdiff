@@ -32,21 +32,6 @@ namespace SFTP {
 class Connection;
 }
 
-/** @defgroup ComparisonFlags Flags for Comparison
- *
- * Flag bits for the @ref Comparison::flags field.
- * @{
- */
-
-/** @brief Treat first file as empty if missing */
-const unsigned NEW_AS_EMPTY_1 = 1;
-
-/** @brief Treat second file as empty if missing */
-const unsigned NEW_AS_EMPTY_2 = 2;
-
-/** @brief Report identical files */
-const unsigned REPORT_IDENTICAL = 4;
-
 /** @} */
 
 /** @brief Context for one or more comparisons
@@ -54,6 +39,18 @@ const unsigned REPORT_IDENTICAL = 4;
 class Comparison {
 public:
   ~Comparison();
+
+  /** @brief Flags for comparison */
+  enum Flags {
+    /** @brief Treat first file as empty if missing */
+    NEW_AS_EMPTY_1 = 1,
+
+    /** @brief Treat second file as empty if missing */
+    NEW_AS_EMPTY_2 = 2,
+
+    /** @brief Report identical files */
+    REPORT_IDENTICAL = 4,
+  };
 
   /** @brief Comparison mode (corresponding to an option character) */
   int mode = 'u';

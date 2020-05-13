@@ -123,24 +123,21 @@ void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
     // Ensure it is connected
     conn->connect();
 
-    // Attempt to open the file
-    std::string handle;
-    bool open_ok;
+    // Find out the file type
+    SFTP::Attributes attrs;
     try {
-      handle = conn->open(path, SSH_FXF_READ);
-      open_ok = true;
+      conn->stat(path, attrs);
+      if(S_ISDIR(attrs.permissions))
+        syserror(f, EISDIR);
     } catch(SFTP::Error &e) {
       if(e.status != SSH_FX_NO_SUCH_FILE || !(fileno & flags))
         throw;
       newname = "/dev/null";
     }
 
-    if(open_ok) {
-      // Reject directories
-      SFTP::Attributes attrs;
-      conn->fstat(handle, attrs);
-      if(S_ISDIR(attrs.permissions))
-        syserror(f, EISDIR);
+    if(newname != "") {
+      // Attempt to open the file
+      std::string handle = conn->open(path, SSH_FXF_READ);
 
       // Create a pipe to feed it to the child
       int p[2];

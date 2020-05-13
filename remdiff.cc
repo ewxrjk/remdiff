@@ -184,16 +184,16 @@ int main(int argc, char **argv) {
     case OPT_HELP: help(); return 0;
     case OPT_NORMAL: c.mode = OPT_NORMAL; break;
     case OPT_UNI_NEW_FILE:
-      c.flags &= ~(NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2);
-      c.flags |= NEW_AS_EMPTY_1;
+      c.flags &= ~(Comparison::NEW_AS_EMPTY_1 | Comparison::NEW_AS_EMPTY_2);
+      c.flags |= Comparison::NEW_AS_EMPTY_1;
       break;
     case 'N':
-      c.flags &= ~(NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2);
-      c.flags |= NEW_AS_EMPTY_1 | NEW_AS_EMPTY_2;
+      c.flags &= ~(Comparison::NEW_AS_EMPTY_1 | Comparison::NEW_AS_EMPTY_2);
+      c.flags |= Comparison::NEW_AS_EMPTY_1 | Comparison::NEW_AS_EMPTY_2;
       break;
     case 'q': c.mode = 'q'; break;
     case 's':
-      c.flags |= REPORT_IDENTICAL;
+      c.flags |= Comparison::REPORT_IDENTICAL;
       c.extra_args.push_back("-s");
       break;
     case 'u':
