@@ -185,6 +185,12 @@ public:
    */
   void finish_readdir(uint32_t id, std::vector<SFTP::Attributes> &names);
 
+  /** @brief Get a possibly shared connection to a host
+   * @param host Hostname
+   * @return Connection
+   */
+  static Connection *connection(const std::string &host);
+
 private:
   /** @brief Hostname */
   std::string name;
@@ -315,6 +321,12 @@ private:
    */
   void unpacknames(const std::string &s, size_t &pos,
                    std::vector<Attributes> names);
+
+  /** @brief Lock guarding static fields */
+  static std::mutex static_lock;
+
+  /** @brief Hostnames to SFTP connections */
+  static std::map<std::string, SFTP::Connection *> conns;
 
   /** @brief Lock guarding all later fields */
   std::mutex lock;

@@ -24,6 +24,9 @@
 #include <cstring>
 #include <cinttypes>
 
+std::mutex SFTP::Connection::static_lock;
+std::map<std::string, SFTP::Connection *> SFTP::Connection::conns;
+
 SFTP::Connection::Connection(const std::string &name_) : name(name_) {}
 
 SFTP::Connection::~Connection() {
@@ -592,4 +595,19 @@ void SFTP::Attributes::unpack(const SFTP::Connection &c,
       extended.push_back({ type, data });
     }
   }
+}
+
+SFTP::Connection *SFTP::Connection::connection(const std::string &host) {
+  std::unique_lock<std::mutex> locked(static_lock);
+  auto it = conns.find(host);
+  Connection *conn;
+  if(it == conns.end()) {
+    conn = new SFTP::Connection(host);
+    conns[host] = conn;
+  } else
+    conn = it->second;
+
+  // Ensure it is connected
+  conn->connect();
+  return conn;
 }

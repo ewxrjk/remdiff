@@ -35,10 +35,6 @@ Comparison::~Comparison() {
   // Join any surviving threads
   drain_fds();
   join_threads();
-  // Close SFTP connections
-  for(auto &it : conns)
-    delete it.second;
-  conns.clear();
 }
 
 int Comparison::compare_files(const std::string &f1, const std::string &f2) {
@@ -110,18 +106,7 @@ void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
     std::string host = f.substr(0, colon);
     std::string path = f.substr(colon + 1);
 
-    // Make sure we have an SFTP connection. If both files are on the same
-    // host we can share the connection.
-    SFTP::Connection *conn;
-    auto it = conns.find(host);
-    if(it == conns.end()) {
-      conn = new SFTP::Connection(host);
-      conns[host] = conn;
-    } else
-      conn = it->second;
-
-    // Ensure it is connected
-    conn->connect();
+    auto conn = SFTP::Connection::connection(host);
 
     // Find out the file type
     SFTP::Attributes attrs;

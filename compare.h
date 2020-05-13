@@ -92,9 +92,6 @@ private:
     };
   };
 
-  /** @brief Hostnames to SFTP connections */
-  std::map<std::string, SFTP::Connection *> conns;
-
   /** @brief Background threads */
   std::vector<std::thread> threads;
 
