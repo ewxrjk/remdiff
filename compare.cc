@@ -122,7 +122,8 @@ void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
 
     if(newname != "") {
       // Attempt to open the file
-      std::string handle = conn->open(path, SSH_FXF_READ);
+      auto *handle = new SFTP::FileHandle();
+      conn->open(*handle, path, SSH_FXF_READ);
 
       // Create a pipe to feed it to the child
       int p[2];
@@ -132,8 +133,7 @@ void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
       close_on_exec(p[1]);
 
       // Create a thread to do feeding
-      threads.push_back(
-        std::thread(Comparison::feed_file, conn, f, handle, p[1]));
+      threads.push_back(std::thread(Comparison::feed_file, f, handle, p[1]));
       fds.push_back(p[0]);
       // TODO push this into run_diff?
 
@@ -199,8 +199,8 @@ void Comparison::add_file(const std::string &f, std::vector<std::string> &args,
   }
 }
 
-void Comparison::feed_file(SFTP::Connection *conn, std::string context,
-                           std::string handle, int fd) {
+void Comparison::feed_file(std::string context, SFTP::FileHandle *handle,
+                           int fd) {
   if(debug)
     fprintf(stderr, "DEBUG: %s\n", __func__);
   uint32_t id;
@@ -214,14 +214,14 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
     for(;;) {
       // Make sure there are plenty of reads in flight.
       while(ids.size() < inflight_limit) {
-        id = conn->begin_read(handle, offset, chunk);
+        id = handle->begin_read(offset, chunk);
         offset += chunk;
         ids.push_back(id);
       }
       // Wait for the next read to finish
       id = ids.front();
       ids.pop_front();
-      result = conn->finish_read(id);
+      result = handle->finish_read(id);
       if(result.size() == 0)
         break;
       if(writeall(fd, &result[0], result.size()) < 0) {
@@ -244,14 +244,14 @@ void Comparison::feed_file(SFTP::Connection *conn, std::string context,
     try {
       id = ids.front();
       ids.pop_front();
-      conn->finish_read(id);
+      handle->finish_read(id);
     } catch(std::runtime_error &e) {
       // Ignore any errors
     }
   }
   // We own the local and remote file descriptors.
   close(fd);
-  conn->close(handle);
+  handle->close();
 }
 
 void Comparison::drain_fds() {

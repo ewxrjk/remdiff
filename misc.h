@@ -58,4 +58,10 @@ ssize_t writeall(int fd, const char *buffer, size_t n);
   syserror(context, errno);
 }
 
+/** @brief Return the basename of a file
+ * @param filename Filename
+ * @return Basename
+ */
+std::string basename(const std::string &filename);
+
 #endif

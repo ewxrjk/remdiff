@@ -54,3 +54,11 @@ ssize_t writeall(int fd, const char *buffer, size_t n) {
   throw std::system_error(std::error_code(errno_value, std::system_category()),
                           context);
 }
+
+std::string basename(const std::string &filename) {
+  size_t slash = filename.rfind('/');
+  if(slash == std::string::npos)
+    return filename;
+  else
+    return filename.substr(slash + 1);
+}

@@ -30,7 +30,9 @@
 
 namespace SFTP {
 class Connection;
-}
+class Attributes;
+class FileHandle;
+} // namespace SFTP
 
 /** @} */
 
@@ -123,8 +125,7 @@ private:
    *
    * @p handle and @p fd will be closed.
    */
-  static void feed_file(SFTP::Connection *conn, std::string context,
-                        std::string handle, int fd);
+  static void feed_file(std::string context, SFTP::FileHandle *handle, int fd);
 
   /** @brief Drain and close internal file descriptors */
   void drain_fds();
